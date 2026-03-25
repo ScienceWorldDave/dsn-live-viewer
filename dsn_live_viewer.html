@@ -183,6 +183,7 @@
         let auditVisible = false;
         let selectedBeamLabel = null;
         const auditStateByConnectionId = new Map();
+        let lastNetworkSummaryHtml = '';
         const EPHEMERIS_MARKERS = {
             sun: { color: 0xffdd66, scale: 1.1 },
             moon: { color: 0xdde7ff, scale: 0.75 },
@@ -512,7 +513,7 @@
 
         function renderConnectionList() {
             if (connectionRows.length === 0) {
-                logEl.innerHTML = '<div>No active downlinks.</div>';
+                logEl.innerHTML = `<div>No active downlinks.</div>${lastNetworkSummaryHtml}`;
                 return;
             }
 
@@ -521,7 +522,22 @@
                     <strong>${row.spacecraft}</strong> - ${row.fullName}<br>
                     ${row.siteLabel} | ${row.dataRateLabel} | ${row.dishName}
                 </button>
-            `).join('');
+            `).join('') + lastNetworkSummaryHtml;
+        }
+
+        function formatActivitySummary(activityCounts) {
+            const entries = Array.from(activityCounts.entries())
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 6);
+            if (entries.length === 0) {
+                return '';
+            }
+            return `
+                <div style="margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.15); color:#cfe;">
+                    <div style="color:#fff; margin-bottom:4px;">Current dish activities</div>
+                    ${entries.map(([activity, count]) => `<div>${count} dish${count === 1 ? '' : 'es'}: ${activity}</div>`).join('')}
+                </div>
+            `;
         }
 
         function renderDetails() {
@@ -1133,6 +1149,7 @@
                 let activeLinks = 0;
                 let currentSiteKey = null;
                 let currentStationTimeUtc = new Date().toISOString();
+                const activityCounts = new Map();
                 connectionRows.length = 0;
                 const activeConnectionIds = new Set();
                 Object.values(dishGroups).forEach(siteGroup => {
@@ -1156,6 +1173,8 @@
                     const siteKey = getSiteKeyForDish(node, currentSiteKey);
                     const az = parseFloat(node.getAttribute('azimuthAngle') ?? node.getAttribute('azimuth'));
                     const el = parseFloat(node.getAttribute('elevationAngle') ?? node.getAttribute('elevation'));
+                    const activity = node.getAttribute('activity') || 'Unspecified activity';
+                    activityCounts.set(activity, (activityCounts.get(activity) || 0) + 1);
 
                     if (!dishGroups[siteKey] || Number.isNaN(az) || Number.isNaN(el)) {
                         return;
@@ -1304,10 +1323,13 @@
                 statusEl.innerText = activeLinks > 0
                     ? `CONNECTION SECURE - ${activeLinks} ACTIVE LINKS`
                     : "CONNECTION SECURE - NO ACTIVE DOWNLINKS";
+                lastNetworkSummaryHtml = formatActivitySummary(activityCounts);
                 refreshSelectionStyles();
             } catch (e) {
                 console.error(e);
                 statusEl.innerText = "CONNECTION LOST. RETRYING...";
+                lastNetworkSummaryHtml = '<div style="margin-top:10px; color:#fbb;">Could not fetch the DSN feed from the server proxy. This is usually a network issue or an upstream NASA/JPL outage.</div>';
+                renderConnectionList();
             }
         }
 
