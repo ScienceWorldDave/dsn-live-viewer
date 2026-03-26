@@ -2,12 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <title>DSN Live 3D - OBJ Earth</title>
     <style>
-        body { margin: 0; background-color: #000; color: #0f0; font-family: monospace; overflow: hidden; }
+        html, body { overscroll-behavior: none; }
+        body { margin: 0; background-color: #000; color: #0f0; font-family: monospace; overflow: hidden; touch-action: none; }
         #ui { position: absolute; top: 20px; left: 20px; z-index: 10; pointer-events: none; transform-origin: top left; }
-        .status-box { background: rgba(0, 15, 0, 0.9); border: 1px solid #0f0; padding: 15px; width: min(520px, calc(100vw - 40px)); pointer-events: auto; max-height: calc(100vh - 40px); overflow: hidden; }
-        #log { font-size: 14px; color: #0ff; margin-top: 10px; overflow: visible; }
+        .status-box { background: rgba(0, 15, 0, 0.9); border: 1px solid #0f0; padding: 15px; width: min(520px, calc(100vw - 40px)); pointer-events: auto; max-height: calc(100vh - 40px); overflow: hidden; display: flex; flex-direction: column; }
+        #sidebar-scroll { margin-top: 10px; overflow-y: auto; overflow-x: hidden; min-height: 0; flex: 1 1 auto; padding-right: 6px; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+        #log { font-size: 14px; color: #0ff; overflow: visible; }
         #details { font-size: 14px; line-height: 1.45; color: #9ff; margin-top: 14px; min-height: 120px; border-top: 1px solid rgba(0,255,0,0.25); padding-top: 12px; }
         h1 { margin: 0; font-size: 16px; border-bottom: 1px solid #0f0; }
         .conn-item { display: block; width: 100%; box-sizing: border-box; margin: 0 0 8px; padding: 10px 12px; border: 1px solid rgba(0,255,255,0.3); background: rgba(0,40,50,0.35); color: #bff; text-align: left; cursor: pointer; font: inherit; line-height: 1.35; }
@@ -17,11 +20,19 @@
         .detail-label { color: #6fd; }
         .detail-title { font-size: 18px; color: #fff; margin-bottom: 6px; }
         .detail-blurb { margin-top: 10px; color: #d8ffff; }
-        #ephemeris-legend { font-size: 12px; line-height: 1.4; color: #ffd; margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 10px; }
-        .toolbar { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+        #ephemeris-legend { display: none; }
+        #tools { position: absolute; right: 20px; bottom: 20px; z-index: 12; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; pointer-events: auto; max-width: min(520px, calc(100vw - 40px)); }
         .tool-btn { padding: 8px 10px; border: 1px solid rgba(0,255,255,0.45); background: rgba(0,40,50,0.45); color: #dff; cursor: pointer; font: inherit; }
         .tool-btn:hover { border-color: #fff; background: rgba(255,255,255,0.12); }
         .tool-btn.active { border-color: #fff; background: rgba(255,255,255,0.16); color: #fff; }
+        #site-popup { position: absolute; right: 20px; bottom: 72px; z-index: 11; min-width: 260px; max-width: min(420px, calc(100vw - 40px)); padding: 12px 14px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0, 10, 18, 0.92); color: #dff; pointer-events: none; opacity: 0; transform: translateY(8px); transition: opacity 0.18s ease, transform 0.18s ease; }
+        #site-popup.visible { opacity: 1; transform: translateY(0); }
+        #site-popup-title { font-size: 18px; margin-bottom: 6px; }
+        #site-popup-body { font-size: 13px; line-height: 1.45; }
+        #body-popup { position: absolute; right: 20px; bottom: 72px; z-index: 11; min-width: 260px; max-width: min(420px, calc(100vw - 40px)); padding: 12px 14px; border: 1px solid rgba(255,255,255,0.2); background: rgba(8, 10, 24, 0.94); color: #dff; pointer-events: none; opacity: 0; transform: translateY(8px); transition: opacity 0.18s ease, transform 0.18s ease; }
+        #body-popup.visible { opacity: 1; transform: translateY(0); }
+        #body-popup-title { font-size: 18px; margin-bottom: 6px; }
+        #body-popup-body { font-size: 13px; line-height: 1.45; }
     </style>
 </head>
 <body>
@@ -29,15 +40,25 @@
         <div class="status-box">
             <h1>DSN SYSTEMS LIVE</h1>
             <div id="status">INITIALIZING...</div>
-            <div class="toolbar">
-                <button id="reset-view" class="tool-btn">Reset View (R)</button>
-                <button id="toggle-constellations" class="tool-btn">Constellations (C)</button>
-                <button id="toggle-audit" class="tool-btn">Audit Angles (A)</button>
+            <div id="sidebar-scroll">
+                <div id="log"></div>
+                <div id="details">Select a connection to inspect its live values.</div>
+                <div id="ephemeris-legend">Loading Sun/Moon/planet markers...</div>
             </div>
-            <div id="log"></div>
-            <div id="details">Select a connection to inspect its live values.</div>
-            <div id="ephemeris-legend">Loading Sun/Moon/planet markers...</div>
         </div>
+    </div>
+    <div id="site-popup">
+        <div id="site-popup-title"></div>
+        <div id="site-popup-body"></div>
+    </div>
+    <div id="body-popup">
+        <div id="body-popup-title"></div>
+        <div id="body-popup-body"></div>
+    </div>
+    <div id="tools">
+        <button id="reset-view" class="tool-btn">Reset View (R)</button>
+        <button id="toggle-constellations" class="tool-btn">Constellations (C)</button>
+        <button id="toggle-audit" class="tool-btn">Audit Angles (A)</button>
     </div>
 
     <script type="importmap">
@@ -74,9 +95,11 @@
         renderer.setPixelRatio(window.devicePixelRatio || 1);
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
+        renderer.domElement.style.touchAction = 'none';
         
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enablePan = false;
+        controls.maxDistance = 72;
         const DEFAULT_CAMERA_POSITION = new THREE.Vector3(15, 10, 15);
         const DEFAULT_CAMERA_TARGET = new THREE.Vector3(0, 0, 0);
         camera.position.copy(DEFAULT_CAMERA_POSITION);
@@ -169,6 +192,12 @@
         const logEl = document.getElementById('log');
         const detailsEl = document.getElementById('details');
         const ephemerisLegendEl = document.getElementById('ephemeris-legend');
+        const sitePopupEl = document.getElementById('site-popup');
+        const sitePopupTitleEl = document.getElementById('site-popup-title');
+        const sitePopupBodyEl = document.getElementById('site-popup-body');
+        const bodyPopupEl = document.getElementById('body-popup');
+        const bodyPopupTitleEl = document.getElementById('body-popup-title');
+        const bodyPopupBodyEl = document.getElementById('body-popup-body');
         const resetViewButton = document.getElementById('reset-view');
         const toggleConstellationsButton = document.getElementById('toggle-constellations');
         const toggleAuditButton = document.getElementById('toggle-audit');
@@ -178,12 +207,16 @@
         const tempBeamLabelOffset = new THREE.Vector3();
         const raycaster = new THREE.Raycaster();
         const pointer = new THREE.Vector2();
+        const pointerDownScreen = new THREE.Vector2();
         const STARFIELD_RADIUS = 600;
         let constellationsVisible = false;
         let auditVisible = false;
         let selectedBeamLabel = null;
+        let selectedSiteKey = null;
+        let selectedBodyKey = null;
+        let activePointerId = null;
         const auditStateByConnectionId = new Map();
-        let lastNetworkSummaryHtml = '';
+        const siteActivitySummaryBySite = new Map();
         const EPHEMERIS_MARKERS = {
             sun: { color: 0xffdd66, scale: 1.1 },
             moon: { color: 0xdde7ff, scale: 0.75 },
@@ -313,12 +346,82 @@
                 blurb: "Wind observes the solar wind and related particles and fields near the Sun-Earth L1 region, supporting heliophysics research and space-weather monitoring.",
                 source: "https://science.nasa.gov/mission/wind/"
             },
+            SOHO: {
+                fullName: "Solar and Heliospheric Observatory",
+                launchDate: "Dec. 2, 1995",
+                objective: "Study the Sun from its deep core through the corona and solar wind.",
+                blurb: "SOHO is a joint ESA-NASA mission at Sun-Earth L1 that observes the Sun's structure, atmosphere, and outflow, and has also discovered thousands of comets.",
+                source: "https://www.esa.int/Science_Exploration/Space_Science/SOHO_overview"
+            },
             IMAP: {
                 fullName: "Interstellar Mapping and Acceleration Probe",
                 launchDate: "Sept. 24, 2025",
                 objective: "Map the heliosphere boundary and study how the solar wind interacts with interstellar space.",
                 blurb: "IMAP is a modern heliophysics mission at L1 that studies energetic particles, the heliosphere, and conditions that shape space weather near Earth.",
                 source: "https://science.nasa.gov/mission/imap/"
+            },
+            JNO: {
+                fullName: "Juno",
+                launchDate: "Aug. 5, 2011",
+                objective: "Investigate Jupiter's origin, interior structure, atmosphere, and magnetosphere.",
+                blurb: "Juno orbits Jupiter on a polar path to measure the planet's gravity, magnetic field, composition, and auroras, helping reveal how the giant planet formed and evolved.",
+                source: "https://science.nasa.gov/mission/juno/"
+            },
+            LRO: {
+                fullName: "Lunar Reconnaissance Orbiter",
+                launchDate: "June 18, 2009",
+                objective: "Map the Moon and support robotic and human exploration planning.",
+                blurb: "LRO has studied the Moon in detail since 2009, mapping its surface, temperature, composition, and radiation environment to support science and future lunar missions.",
+                source: "https://science.nasa.gov/mission/lro"
+            },
+            PSP: {
+                fullName: "Parker Solar Probe",
+                launchDate: "Aug. 12, 2018",
+                objective: "Trace energy flow through the solar corona and reveal what accelerates the solar wind and energetic particles.",
+                blurb: "Parker Solar Probe flies closer to the Sun than any previous mission, sampling the solar corona directly to improve our understanding of the Sun and space weather.",
+                source: "https://science.nasa.gov/blogs/parker-solar-probe/2018/08/11/the-parker-solar-probe-mission/"
+            },
+            MMS4: {
+                fullName: "Magnetospheric Multiscale Mission 4",
+                launchDate: "March 12, 2015",
+                objective: "Study magnetic reconnection in Earth's magnetosphere using a four-spacecraft formation.",
+                blurb: "MMS uses four identical spacecraft flying in formation to investigate how magnetic fields around Earth connect, break apart, and explosively release energy.",
+                source: "https://science.nasa.gov/mission/magnetospheric-multiscale-mission/"
+            },
+            STA: {
+                fullName: "STEREO-A",
+                launchDate: "Oct. 25, 2006",
+                objective: "Observe the Sun and coronal mass ejections from a different vantage point than Earth.",
+                blurb: "STEREO-A is one of NASA's Solar Terrestrial Relations Observatory spacecraft, providing heliophysics observations of the Sun and solar eruptions from an orbit around the Sun.",
+                source: "https://science.nasa.gov/mission/stereo/"
+            },
+            MRO: {
+                fullName: "Mars Reconnaissance Orbiter",
+                launchDate: "Aug. 12, 2005",
+                objective: "Study Mars in high detail and support Mars surface missions.",
+                blurb: "MRO maps the Martian surface, subsurface, and atmosphere in unprecedented detail and also serves as a critical communications relay for Mars landers and rovers.",
+                source: "https://science.nasa.gov/mission/mars-reconnaissance-orbiter/science/"
+            },
+            M01O: {
+                fullName: "2001 Mars Odyssey",
+                launchDate: "April 7, 2001",
+                objective: "Map Martian minerals and radiation while relaying communications for Mars surface missions.",
+                blurb: "Mars Odyssey has studied the composition and radiation environment of Mars for decades and continues to support Mars exploration as a long-lived orbital relay spacecraft.",
+                source: "https://science.nasa.gov/mission/2001-mars-odyssey/"
+            },
+            TGO: {
+                fullName: "ExoMars Trace Gas Orbiter",
+                launchDate: "March 14, 2016",
+                objective: "Study trace gases and atmospheric processes at Mars and relay communications for surface missions.",
+                blurb: "The ExoMars Trace Gas Orbiter investigates rare gases in the Martian atmosphere, images the surface, and supports Mars missions with relay communications.",
+                source: "https://science.nasa.gov/mission/tgo/"
+            },
+            LUCY: {
+                fullName: "Lucy",
+                launchDate: "Oct. 16, 2021",
+                objective: "Explore Trojan asteroids that share Jupiter's orbit to study solar system formation.",
+                blurb: "Lucy is the first mission to visit the Trojan asteroids, targeting multiple small bodies that preserve clues about the early solar system.",
+                source: "https://science.nasa.gov/mission/lucy/"
             },
             JWST: {
                 fullName: "James Webb Space Telescope",
@@ -439,6 +542,25 @@
             return `${Math.round(km).toLocaleString()} km`;
         }
 
+        function formatRtltFromDistanceKm(distanceKm) {
+            if (!Number.isFinite(distanceKm) || distanceKm <= 0) {
+                return "Unavailable";
+            }
+            const seconds = (distanceKm * 2) / SPEED_OF_LIGHT_KM_S;
+            if (seconds < 60) {
+                return `${seconds.toFixed(2)} s`;
+            }
+            const minutes = seconds / 60;
+            if (minutes < 60) {
+                return `${minutes.toFixed(1)} min`;
+            }
+            const hours = minutes / 60;
+            if (hours < 48) {
+                return `${hours.toFixed(1)} hr`;
+            }
+            return `${(hours / 24).toFixed(1)} d`;
+        }
+
         function setBeamRigVisualState(beamRig, isSelected, hasSelection) {
             const beamOpacity = isSelected ? 0.98 : hasSelection ? Math.max(0.14, beamRig.baseBeamOpacity * 0.55) : beamRig.baseBeamOpacity;
             const beamColor = isSelected ? 0xffffff : beamRig.color;
@@ -509,11 +631,12 @@
             }
             renderConnectionList();
             renderDetails();
+            updateSiteSelection();
         }
 
         function renderConnectionList() {
             if (connectionRows.length === 0) {
-                logEl.innerHTML = `<div>No active downlinks.</div>${lastNetworkSummaryHtml}`;
+                logEl.innerHTML = '<div>No active downlinks.</div>';
                 return;
             }
 
@@ -522,22 +645,62 @@
                     <strong>${row.spacecraft}</strong> - ${row.fullName}<br>
                     ${row.siteLabel} | ${row.dataRateLabel} | ${row.dishName}
                 </button>
-            `).join('') + lastNetworkSummaryHtml;
+            `).join('');
         }
 
-        function formatActivitySummary(activityCounts) {
+        function formatSiteActivitySummary(siteKey, activityCounts, activeConnectionCount) {
             const entries = Array.from(activityCounts.entries())
                 .sort((a, b) => b[1] - a[1])
-                .slice(0, 6);
-            if (entries.length === 0) {
-                return '';
-            }
+                .slice(0, 5);
+            const site = SITES[siteKey];
             return `
-                <div style="margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.15); color:#cfe;">
-                    <div style="color:#fff; margin-bottom:4px;">Current dish activities</div>
-                    ${entries.map(([activity, count]) => `<div>${count} dish${count === 1 ? '' : 'es'}: ${activity}</div>`).join('')}
-                </div>
+                <div style="margin-bottom:6px;"><strong>${activeConnectionCount}</strong> active connection${activeConnectionCount === 1 ? '' : 's'} at ${site.label}.</div>
+                ${entries.length > 0
+                    ? entries.map(([activity, count]) => `<div>${count} dish${count === 1 ? '' : 'es'}: ${activity}</div>`).join('')
+                    : '<div>No reported dish activities for this site.</div>'}
             `;
+        }
+
+        function updateSitePopup() {
+            if (!selectedSiteKey || !dishGroups[selectedSiteKey]) {
+                sitePopupEl.classList.remove('visible');
+                sitePopupTitleEl.textContent = '';
+                sitePopupBodyEl.innerHTML = '';
+                return;
+            }
+            const site = dishGroups[selectedSiteKey].site;
+            sitePopupTitleEl.textContent = site.label;
+            sitePopupTitleEl.style.color = `#${site.color.toString(16).padStart(6, '0')}`;
+            sitePopupBodyEl.innerHTML = siteActivitySummaryBySite.get(selectedSiteKey) || 'No current DSN status summary for this site.';
+            sitePopupEl.classList.add('visible');
+        }
+
+        function updateSiteSelection() {
+            Object.entries(dishGroups).forEach(([siteKey, siteGroup]) => {
+                if (siteGroup.label) {
+                    siteGroup.label.visible = siteKey === selectedSiteKey;
+                }
+            });
+            updateSitePopup();
+        }
+
+        function updateBodyPopup() {
+            if (!selectedBodyKey || !ephemerisMarkers.has(selectedBodyKey)) {
+                bodyPopupEl.classList.remove('visible');
+                bodyPopupTitleEl.textContent = '';
+                bodyPopupBodyEl.innerHTML = '';
+                return;
+            }
+            const marker = ephemerisMarkers.get(selectedBodyKey);
+            const color = `#${new THREE.Color(marker.color).getHexString()}`;
+            bodyPopupTitleEl.textContent = marker.bodyLabel;
+            bodyPopupTitleEl.style.color = color;
+            bodyPopupBodyEl.innerHTML = `
+                <div><strong>Distance:</strong> ${Math.round(marker.distanceKm).toLocaleString()} km</div>
+                <div><strong>Return trip light time:</strong> ${formatRtltFromDistanceKm(marker.distanceKm)}</div>
+                <div style="margin-top:6px;">Shown by apparent sky direction on the celestial sphere.</div>
+            `;
+            bodyPopupEl.classList.add('visible');
         }
 
         function renderDetails() {
@@ -560,8 +723,6 @@
                 <div><span class="detail-label">Elevation:</span> ${selected.el.toFixed(1)} deg</div>
                 <div><span class="detail-label">Launch:</span> ${selected.launchDate}</div>
                 <div><span class="detail-label">Objective:</span> ${selected.objective}</div>
-                <div><span class="detail-label">Round-trip light time:</span> ${selected.rtltLabel}</div>
-                <div><span class="detail-label">Approx. distance:</span> ${selected.distanceKmLabel}</div>
                 <div><span class="detail-label">Target:</span> ${selected.targetName}</div>
                 <div><span class="detail-label">Channels:</span> ${selected.channelSummary}</div>
                 ${auditHtml}
@@ -729,6 +890,60 @@
             camera.updateProjectionMatrix();
         }
 
+        function updatePointerFromEvent(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        }
+
+        function pickSceneAtPointer() {
+            raycaster.setFromCamera(pointer, camera);
+
+            const bodyPickers = [];
+            ephemerisMarkers.forEach(marker => {
+                if (marker.picker) {
+                    bodyPickers.push(marker.picker);
+                }
+            });
+            const bodyIntersections = raycaster.intersectObjects(bodyPickers, false);
+            if (bodyIntersections.length > 0) {
+                const bodyKey = bodyIntersections[0].object.userData.bodyKey;
+                selectedSiteKey = null;
+                selectedBodyKey = selectedBodyKey === bodyKey ? null : bodyKey;
+                updateSiteSelection();
+                updateBodyPopup();
+                return true;
+            }
+
+            const sitePickers = Object.values(dishGroups).map(siteGroup => siteGroup.picker).filter(Boolean);
+            const siteIntersections = raycaster.intersectObjects(sitePickers, false);
+            if (siteIntersections.length > 0) {
+                const siteKey = siteIntersections[0].object.userData.siteKey;
+                selectedBodyKey = null;
+                selectedSiteKey = selectedSiteKey === siteKey ? null : siteKey;
+                updateBodyPopup();
+                updateSiteSelection();
+                return true;
+            }
+
+            const beams = [];
+            connectionMap.forEach(beamRig => {
+                beams.push(beamRig.beamPicker);
+            });
+            const beamIntersections = raycaster.intersectObjects(beams, false);
+            if (beamIntersections.length > 0) {
+                const beamRig = beamIntersections[0].object.userData.beamRig;
+                if (!beamRig?.connectionId) {
+                    return false;
+                }
+                selectedConnectionId = beamRig.connectionId;
+                refreshSelectionStyles();
+                return true;
+            }
+
+            return false;
+        }
+
         logEl.addEventListener('click', event => {
             const button = event.target.closest('.conn-item');
             if (!button) {
@@ -738,28 +953,32 @@
             refreshSelectionStyles();
         });
         renderer.domElement.addEventListener('pointerdown', event => {
-            const rect = renderer.domElement.getBoundingClientRect();
-            pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-            pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-            raycaster.setFromCamera(pointer, camera);
-
-            const beams = [];
-            connectionMap.forEach(beamRig => {
-                beams.push(beamRig.beamPicker);
-            });
-            const intersections = raycaster.intersectObjects(beams, false);
-            if (intersections.length === 0) {
+            if (activePointerId !== null) {
                 return;
             }
-
-            const beamRig = intersections[0].object.userData.beamRig;
-            if (!beamRig?.connectionId) {
-                return;
-            }
-
-            selectedConnectionId = beamRig.connectionId;
-            refreshSelectionStyles();
+            activePointerId = event.pointerId;
+            pointerDownScreen.set(event.clientX, event.clientY);
         });
+        renderer.domElement.addEventListener('pointerup', event => {
+            if (event.pointerId !== activePointerId) {
+                return;
+            }
+            const moved = Math.hypot(event.clientX - pointerDownScreen.x, event.clientY - pointerDownScreen.y);
+            activePointerId = null;
+            if (moved > 12) {
+                return;
+            }
+            updatePointerFromEvent(event);
+            pickSceneAtPointer();
+        });
+        renderer.domElement.addEventListener('pointercancel', event => {
+            if (event.pointerId === activePointerId) {
+                activePointerId = null;
+            }
+        });
+        document.addEventListener('gesturestart', event => event.preventDefault(), { passive: false });
+        document.addEventListener('gesturechange', event => event.preventDefault(), { passive: false });
+        document.addEventListener('gestureend', event => event.preventDefault(), { passive: false });
         function handleResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
@@ -815,7 +1034,7 @@
             ctx.fillText(label.toUpperCase(), canvas.width / 2, canvas.height / 2);
             const texture = new THREE.CanvasTexture(canvas);
             texture.colorSpace = THREE.SRGBColorSpace;
-            const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false });
+            const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: true, depthWrite: false });
             const sprite = new THREE.Sprite(material);
             sprite.renderOrder = 20;
             sprite.userData.baseScale = new THREE.Vector2(10, 1.9);
@@ -824,25 +1043,57 @@
         }
 
         function createBeamLabelSprite(label) {
+            const font = 'bold 78px monospace';
+            const paddingX = 120;
             const canvas = document.createElement('canvas');
-            canvas.width = 1536;
+            const measureCanvas = document.createElement('canvas');
+            const measureCtx = measureCanvas.getContext('2d');
+            measureCtx.font = font;
+            const textWidth = Math.ceil(measureCtx.measureText(label).width);
+            canvas.width = Math.max(1536, Math.min(3072, textWidth + paddingX * 2));
             canvas.height = 160;
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = '#ffffff';
             ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
             ctx.shadowBlur = 18;
-            ctx.font = 'bold 78px monospace';
+            ctx.font = font;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(label, canvas.width / 2, canvas.height / 2);
             const texture = new THREE.CanvasTexture(canvas);
             texture.colorSpace = THREE.SRGBColorSpace;
-            const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false });
+            const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: true, depthWrite: false });
             const sprite = new THREE.Sprite(material);
             sprite.renderOrder = 25;
-            sprite.userData.baseScale = new THREE.Vector2(12, 1.4);
-            sprite.scale.set(12, 1.4, 1);
+            const aspect = canvas.width / canvas.height;
+            const height = 1.4;
+            const width = height * aspect;
+            sprite.userData.baseScale = new THREE.Vector2(width, height);
+            sprite.scale.set(width, height, 1);
+            return sprite;
+        }
+
+        function createSiteLabelSprite(label, color) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 768;
+            canvas.height = 144;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = color;
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
+            ctx.shadowBlur = 16;
+            ctx.font = 'bold 72px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label.toUpperCase(), canvas.width / 2, canvas.height / 2);
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
+            const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: true, depthWrite: false });
+            const sprite = new THREE.Sprite(material);
+            sprite.renderOrder = 22;
+            sprite.scale.set(2.8, 0.52, 1);
+            sprite.visible = false;
             return sprite;
         }
 
@@ -871,20 +1122,20 @@
         function updateEphemerisLabelScales() {
             const fovFactor = Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5));
             ephemerisMarkers.forEach(marker => {
-                const { label, anchorPosition } = marker;
+                const { labelSprite, anchorPosition } = marker;
                 if (!anchorPosition) {
                     return;
                 }
                 const distance = camera.position.distanceTo(anchorPosition);
                 const worldScale = distance * fovFactor * 0.048;
-                label.scale.set(
-                    label.userData.baseScale.x * worldScale,
-                    label.userData.baseScale.y * worldScale,
+                labelSprite.scale.set(
+                    labelSprite.userData.baseScale.x * worldScale,
+                    labelSprite.userData.baseScale.y * worldScale,
                     1
                 );
 
-                const verticalOffset = label.scale.y * 0.25;
-                label.position.copy(anchorPosition).add(camera.up.clone().normalize().multiplyScalar(verticalOffset));
+                const verticalOffset = labelSprite.scale.y * 0.25;
+                labelSprite.position.copy(anchorPosition).add(camera.up.clone().normalize().multiplyScalar(verticalOffset));
             });
         }
 
@@ -1020,7 +1271,6 @@
         }
 
         function updateEphemerisMarkers(payload) {
-            const legendRows = [];
             for (const [key, body] of Object.entries(payload.bodies || {})) {
                 const markerStyle = EPHEMERIS_MARKERS[key] || { color: 0xffffff, scale: 0.25 };
                 let marker = ephemerisMarkers.get(key);
@@ -1029,11 +1279,18 @@
                         new THREE.SphereGeometry(markerStyle.scale, 16, 16),
                         new THREE.MeshBasicMaterial({ color: markerStyle.color, depthTest: false, depthWrite: false })
                     );
-                    const label = createMarkerSprite(body.label, '#ffffff');
+                    const picker = new THREE.Mesh(
+                        new THREE.SphereGeometry(Math.max(markerStyle.scale * 3.8, 3.0), 16, 16),
+                        new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
+                    );
+                    const labelSprite = createMarkerSprite(body.label, '#ffffff');
                     sphere.renderOrder = 15;
+                    sphere.userData.bodyKey = key;
+                    picker.userData.bodyKey = key;
                     ephemerisGroup.add(sphere);
-                    ephemerisGroup.add(label);
-                    marker = { sphere, label };
+                    ephemerisGroup.add(picker);
+                    ephemerisGroup.add(labelSprite);
+                    marker = { sphere, picker, labelSprite };
                     ephemerisMarkers.set(key, marker);
                 }
 
@@ -1043,16 +1300,17 @@
                 const position = rawVector.normalize().multiplyScalar(getEphemerisMarkerRadius(distanceKm));
 
                 marker.sphere.position.copy(position);
+                marker.picker.position.copy(position);
                 marker.anchorPosition = position.clone();
+                marker.bodyLabel = body.label;
+                marker.color = markerStyle.color;
+                marker.distanceKm = distanceKm;
 
                 if (key === 'sun') {
                     sun.position.copy(position.clone().normalize().multiplyScalar(40));
                 }
-
-                legendRows.push(`${body.label}: ${Math.round(distanceKm).toLocaleString()} km`);
             }
-
-            ephemerisLegendEl.innerHTML = `Apparent sky direction mode<br>${legendRows.join('<br>')}`;
+            updateBodyPopup();
         }
 
         async function updateEphemeris() {
@@ -1065,7 +1323,7 @@
                 updateEphemerisMarkers(payload);
             } catch (error) {
                 console.error(error);
-                ephemerisLegendEl.innerHTML = 'Ephemeris markers unavailable.';
+                bodyPopupEl.classList.remove('visible');
             }
         }
 
@@ -1115,7 +1373,19 @@
                 new THREE.MeshBasicMaterial({ color: site.color })
             );
             group.add(marker);
-            dishGroups[key] = { group, marker, beamRigs: [], site };
+
+            const picker = new THREE.Mesh(
+                new THREE.SphereGeometry(0.38, 16, 16),
+                new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
+            );
+            picker.userData.siteKey = key;
+            group.add(picker);
+
+            const label = createSiteLabelSprite(site.label, `#${site.color.toString(16).padStart(6, '0')}`);
+            label.position.set(0, 0.7, 0);
+            group.add(label);
+
+            dishGroups[key] = { group, marker, picker, label, beamRigs: [], site };
         });
 
         const stationNameToSiteKey = {
@@ -1149,7 +1419,8 @@
                 let activeLinks = 0;
                 let currentSiteKey = null;
                 let currentStationTimeUtc = new Date().toISOString();
-                const activityCounts = new Map();
+                const siteActivityCounts = new Map(Object.keys(SITES).map(siteKey => [siteKey, new Map()]));
+                const siteActiveConnectionCounts = new Map(Object.keys(SITES).map(siteKey => [siteKey, 0]));
                 connectionRows.length = 0;
                 const activeConnectionIds = new Set();
                 Object.values(dishGroups).forEach(siteGroup => {
@@ -1174,7 +1445,10 @@
                     const az = parseFloat(node.getAttribute('azimuthAngle') ?? node.getAttribute('azimuth'));
                     const el = parseFloat(node.getAttribute('elevationAngle') ?? node.getAttribute('elevation'));
                     const activity = node.getAttribute('activity') || 'Unspecified activity';
-                    activityCounts.set(activity, (activityCounts.get(activity) || 0) + 1);
+                    if (siteActivityCounts.has(siteKey)) {
+                        const countsForSite = siteActivityCounts.get(siteKey);
+                        countsForSite.set(activity, (countsForSite.get(activity) || 0) + 1);
+                    }
 
                     if (!dishGroups[siteKey] || Number.isNaN(az) || Number.isNaN(el)) {
                         return;
@@ -1275,6 +1549,10 @@
                         };
                         dishGroups[aggregated.siteKey].beamRigs.push(beamRig);
                         activeLinks += 1;
+                        siteActiveConnectionCounts.set(
+                            aggregated.siteKey,
+                            (siteActiveConnectionCounts.get(aggregated.siteKey) || 0) + 1
+                        );
                         connectionRows.push({
                             id: aggregated.connectionId,
                             siteLabel: aggregated.siteLabel,
@@ -1323,13 +1601,28 @@
                 statusEl.innerText = activeLinks > 0
                     ? `CONNECTION SECURE - ${activeLinks} ACTIVE LINKS`
                     : "CONNECTION SECURE - NO ACTIVE DOWNLINKS";
-                lastNetworkSummaryHtml = formatActivitySummary(activityCounts);
+                Object.keys(SITES).forEach(siteKey => {
+                    siteActivitySummaryBySite.set(
+                        siteKey,
+                        formatSiteActivitySummary(
+                            siteKey,
+                            siteActivityCounts.get(siteKey) || new Map(),
+                            siteActiveConnectionCounts.get(siteKey) || 0
+                        )
+                    );
+                });
                 refreshSelectionStyles();
             } catch (e) {
                 console.error(e);
                 statusEl.innerText = "CONNECTION LOST. RETRYING...";
-                lastNetworkSummaryHtml = '<div style="margin-top:10px; color:#fbb;">Could not fetch the DSN feed from the server proxy. This is usually a network issue or an upstream NASA/JPL outage.</div>';
+                Object.keys(SITES).forEach(siteKey => {
+                    siteActivitySummaryBySite.set(
+                        siteKey,
+                        '<div style="color:#fbb;">Could not fetch the DSN feed from the server proxy. This is usually a network issue or an upstream NASA/JPL outage.</div>'
+                    );
+                });
                 renderConnectionList();
+                updateSitePopup();
             }
         }
 
