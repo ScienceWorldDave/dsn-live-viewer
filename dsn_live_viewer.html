@@ -25,11 +25,11 @@
         .tool-btn { padding: 8px 10px; border: 1px solid rgba(0,255,255,0.45); background: rgba(0,40,50,0.45); color: #dff; cursor: pointer; font: inherit; }
         .tool-btn:hover { border-color: #fff; background: rgba(255,255,255,0.12); }
         .tool-btn.active { border-color: #fff; background: rgba(255,255,255,0.16); color: #fff; }
-        #site-popup { position: absolute; right: 20px; bottom: 72px; z-index: 11; min-width: 260px; max-width: min(420px, calc(100vw - 40px)); padding: 12px 14px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0, 10, 18, 0.92); color: #dff; pointer-events: none; opacity: 0; transform: translateY(8px); transition: opacity 0.18s ease, transform 0.18s ease; }
+        #site-popup { position: absolute; z-index: 11; min-width: 260px; max-width: min(420px, calc(100vw - 40px)); padding: 12px 14px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0, 10, 18, 0.92); color: #dff; pointer-events: none; opacity: 0; transform: translateY(8px); transition: opacity 0.18s ease, transform 0.18s ease; }
         #site-popup.visible { opacity: 1; transform: translateY(0); }
         #site-popup-title { font-size: 18px; margin-bottom: 6px; }
         #site-popup-body { font-size: 13px; line-height: 1.45; }
-        #body-popup { position: absolute; right: 20px; bottom: 72px; z-index: 11; min-width: 260px; max-width: min(420px, calc(100vw - 40px)); padding: 12px 14px; border: 1px solid rgba(255,255,255,0.2); background: rgba(8, 10, 24, 0.94); color: #dff; pointer-events: none; opacity: 0; transform: translateY(8px); transition: opacity 0.18s ease, transform 0.18s ease; }
+        #body-popup { position: absolute; z-index: 11; min-width: 260px; max-width: min(420px, calc(100vw - 40px)); padding: 12px 14px; border: 1px solid rgba(255,255,255,0.2); background: rgba(8, 10, 24, 0.94); color: #dff; pointer-events: none; opacity: 0; transform: translateY(8px); transition: opacity 0.18s ease, transform 0.18s ease; }
         #body-popup.visible { opacity: 1; transform: translateY(0); }
         #body-popup-title { font-size: 18px; margin-bottom: 6px; }
         #body-popup-body { font-size: 13px; line-height: 1.45; }
@@ -205,6 +205,8 @@
         const tempBeamWorldPos = new THREE.Vector3();
         const tempBeamLabelPos = new THREE.Vector3();
         const tempBeamLabelOffset = new THREE.Vector3();
+        const tempPopupWorldPos = new THREE.Vector3();
+        const tempPopupScreenPos = new THREE.Vector3();
         const raycaster = new THREE.Raycaster();
         const pointer = new THREE.Vector2();
         const pointerDownScreen = new THREE.Vector2();
@@ -584,6 +586,13 @@
                 beamRig.beam.scale.set(thicknessScale, thicknessScale, 1);
                 beamRig.beamPicker.scale.set(Math.max(2.5, thicknessScale * 1.8), Math.max(2.5, thicknessScale * 1.8), 1);
             });
+            for (const pulse of pulses) {
+                pulse.mesh.getWorldPosition(tempBeamWorldPos);
+                const distance = camera.position.distanceTo(tempBeamWorldPos);
+                const screenScale = THREE.MathUtils.clamp(distance / referenceDistance, 1, 60);
+                const pulseThicknessScale = Math.max(0.78, Math.min(2.2, pulse.beamRig.emphasisScale * Math.pow(screenScale, 0.7) * 0.58));
+                pulse.mesh.scale.set(pulseThicknessScale, 1, pulseThicknessScale);
+            }
         }
 
         function updateSelectedBeamLabel() {
@@ -631,7 +640,7 @@
             }
             renderConnectionList();
             renderDetails();
-            updateSiteSelection();
+            updateSitePopup();
         }
 
         function renderConnectionList() {
@@ -676,11 +685,6 @@
         }
 
         function updateSiteSelection() {
-            Object.entries(dishGroups).forEach(([siteKey, siteGroup]) => {
-                if (siteGroup.label) {
-                    siteGroup.label.visible = siteKey === selectedSiteKey;
-                }
-            });
             updateSitePopup();
         }
 
@@ -703,6 +707,34 @@
             bodyPopupEl.classList.add('visible');
         }
 
+        function placePopupNearWorldPoint(popupEl, worldPosition, screenOffsetX = 18, screenOffsetY = -12) {
+            tempPopupScreenPos.copy(worldPosition).project(camera);
+            const screenX = (tempPopupScreenPos.x * 0.5 + 0.5) * window.innerWidth;
+            const screenY = (-tempPopupScreenPos.y * 0.5 + 0.5) * window.innerHeight;
+            const clampedX = Math.min(
+                Math.max(12, screenX + screenOffsetX),
+                window.innerWidth - popupEl.offsetWidth - 12
+            );
+            const clampedY = Math.min(
+                Math.max(12, screenY + screenOffsetY),
+                window.innerHeight - popupEl.offsetHeight - 12
+            );
+            popupEl.style.left = `${clampedX}px`;
+            popupEl.style.top = `${clampedY}px`;
+        }
+
+        function updateAnchoredPopups() {
+            if (selectedSiteKey && dishGroups[selectedSiteKey] && sitePopupEl.classList.contains('visible')) {
+                dishGroups[selectedSiteKey].marker.getWorldPosition(tempPopupWorldPos);
+                tempPopupWorldPos.y += 0.5;
+                placePopupNearWorldPoint(sitePopupEl, tempPopupWorldPos, 18, -8);
+            }
+            if (selectedBodyKey && ephemerisMarkers.has(selectedBodyKey) && bodyPopupEl.classList.contains('visible')) {
+                tempPopupWorldPos.copy(ephemerisMarkers.get(selectedBodyKey).anchorPosition);
+                placePopupNearWorldPoint(bodyPopupEl, tempPopupWorldPos, 18, -8);
+            }
+        }
+
         function renderDetails() {
             const selected = connectionRows.find(row => row.id === selectedConnectionId);
             if (!selected) {
@@ -718,13 +750,9 @@
                 <div class="detail-title">${selected.spacecraft} - ${selected.fullName}</div>
                 <div><span class="detail-label">Site:</span> ${selected.siteLabel}</div>
                 <div><span class="detail-label">Dish:</span> ${selected.dishName}</div>
-                <div><span class="detail-label">Rate:</span> ${selected.dataRateLabel}</div>
-                <div><span class="detail-label">Azimuth:</span> ${selected.az.toFixed(1)} deg</div>
-                <div><span class="detail-label">Elevation:</span> ${selected.el.toFixed(1)} deg</div>
+                <div><span class="detail-label">Incoming signal:</span> ${selected.channelSummary}</div>
                 <div><span class="detail-label">Launch:</span> ${selected.launchDate}</div>
                 <div><span class="detail-label">Objective:</span> ${selected.objective}</div>
-                <div><span class="detail-label">Target:</span> ${selected.targetName}</div>
-                <div><span class="detail-label">Channels:</span> ${selected.channelSummary}</div>
                 ${auditHtml}
                 <div class="detail-blurb">${selected.blurb}</div>
             `;
@@ -941,6 +969,14 @@
                 return true;
             }
 
+            if (selectedBodyKey || selectedSiteKey) {
+                selectedBodyKey = null;
+                selectedSiteKey = null;
+                updateBodyPopup();
+                updateSiteSelection();
+                return true;
+            }
+
             return false;
         }
 
@@ -1071,29 +1107,6 @@
             const width = height * aspect;
             sprite.userData.baseScale = new THREE.Vector2(width, height);
             sprite.scale.set(width, height, 1);
-            return sprite;
-        }
-
-        function createSiteLabelSprite(label, color) {
-            const canvas = document.createElement('canvas');
-            canvas.width = 768;
-            canvas.height = 144;
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = color;
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
-            ctx.shadowBlur = 16;
-            ctx.font = 'bold 72px monospace';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(label.toUpperCase(), canvas.width / 2, canvas.height / 2);
-            const texture = new THREE.CanvasTexture(canvas);
-            texture.colorSpace = THREE.SRGBColorSpace;
-            const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: true, depthWrite: false });
-            const sprite = new THREE.Sprite(material);
-            sprite.renderOrder = 22;
-            sprite.scale.set(2.8, 0.52, 1);
-            sprite.visible = false;
             return sprite;
         }
 
@@ -1280,7 +1293,7 @@
                         new THREE.MeshBasicMaterial({ color: markerStyle.color, depthTest: false, depthWrite: false })
                     );
                     const picker = new THREE.Mesh(
-                        new THREE.SphereGeometry(Math.max(markerStyle.scale * 3.8, 3.0), 16, 16),
+                        new THREE.SphereGeometry(Math.max(markerStyle.scale * 5.5, 4.8), 16, 16),
                         new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
                     );
                     const labelSprite = createMarkerSprite(body.label, '#ffffff');
@@ -1381,11 +1394,7 @@
             picker.userData.siteKey = key;
             group.add(picker);
 
-            const label = createSiteLabelSprite(site.label, `#${site.color.toString(16).padStart(6, '0')}`);
-            label.position.set(0, 0.7, 0);
-            group.add(label);
-
-            dishGroups[key] = { group, marker, picker, label, beamRigs: [], site };
+            dishGroups[key] = { group, marker, picker, beamRigs: [], site };
         });
 
         const stationNameToSiteKey = {
@@ -1666,6 +1675,7 @@
             updateSelectedBeamLabel();
             updateEphemerisLabelScales();
             controls.update();
+            updateAnchoredPopups();
             renderer.render(scene, camera);
         }
 
