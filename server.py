@@ -30,6 +30,10 @@ AUDIT_SITE_COORDS = {
     "canberra": {"lon": 148.98, "lat": -35.40, "alt_km": 0.7, "label": "Canberra"},
 }
 
+AUDIT_TARGET_OVERRIDES = {
+    "CAPS": "CAPS",
+}
+
 
 def fetch_url(url, timeout=15):
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -164,20 +168,23 @@ def angular_error_deg(dsn_az, dsn_el, horizons_az, horizons_el):
     return math.degrees(math.acos(cos_error))
 
 
-def get_audit_payload(spacecraft_id, site_key, timestamp_utc, dsn_az, dsn_el):
-    cache_key = (spacecraft_id, site_key, timestamp_utc, round(dsn_az, 3), round(dsn_el, 3))
+def get_audit_payload(spacecraft_id, site_key, timestamp_utc, dsn_az, dsn_el, spacecraft_code=""):
+    audit_target = AUDIT_TARGET_OVERRIDES.get(spacecraft_code, spacecraft_id)
+    cache_key = (audit_target, site_key, timestamp_utc, round(dsn_az, 3), round(dsn_el, 3))
     now = time.time()
     cached = AUDIT_CACHE.get(cache_key)
     if cached and (now - cached["timestamp"]) < AUDIT_TTL_SECONDS:
         return cached["payload"]
 
-    horizons = fetch_horizons_observer_azel(spacecraft_id, site_key, timestamp_utc)
+    horizons = fetch_horizons_observer_azel(audit_target, site_key, timestamp_utc)
     delta_az = ((dsn_az - horizons["azimuth_deg"] + 540.0) % 360.0) - 180.0
     delta_el = dsn_el - horizons["elevation_deg"]
     payload = {
         "generated_utc": datetime.now(timezone.utc).isoformat(),
         "site_key": site_key,
         "spacecraft_id": spacecraft_id,
+        "spacecraft_code": spacecraft_code,
+        "audit_target": audit_target,
         "dsn": {
             "azimuth_deg": dsn_az,
             "elevation_deg": dsn_el,
@@ -243,6 +250,7 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             try:
                 query = urllib.parse.parse_qs(parsed.query)
                 spacecraft_id = query.get('spacecraft_id', [''])[0].strip()
+                spacecraft_code = query.get('spacecraft_code', [''])[0].strip()
                 site_key = query.get('site', [''])[0].strip().lower()
                 timestamp_utc = query.get('time_utc', [''])[0].strip()
                 dsn_az = float(query.get('dsn_az', [''])[0])
@@ -250,9 +258,10 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                 if not spacecraft_id or not site_key or not timestamp_utc:
                     raise ValueError("Missing required audit query parameters")
 
-                print(f"Fetching audit data from JPL Horizons for {spacecraft_id} at {site_key}...")
+                audit_target = AUDIT_TARGET_OVERRIDES.get(spacecraft_code, spacecraft_id)
+                print(f"Fetching audit data from JPL Horizons for {audit_target} at {site_key}...")
                 payload = json.dumps(
-                    get_audit_payload(spacecraft_id, site_key, timestamp_utc, dsn_az, dsn_el)
+                    get_audit_payload(spacecraft_id, site_key, timestamp_utc, dsn_az, dsn_el, spacecraft_code)
                 ).encode("utf-8")
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')

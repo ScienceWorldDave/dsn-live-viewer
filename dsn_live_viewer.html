@@ -798,6 +798,7 @@
 
             const params = new URLSearchParams({
                 spacecraft_id: row.spacecraftId,
+                spacecraft_code: row.spacecraft,
                 site: row.siteKey,
                 time_utc: row.timeUtc,
                 dsn_az: String(row.az),
@@ -889,6 +890,7 @@
                 <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.18);">
                     <div class="detail-title" style="font-size:16px;">Audit Against JPL Horizons</div>
                     <div><span class="detail-label">Horizons target:</span> ${audit.horizons.target_name || row.fullName}</div>
+                    <div><span class="detail-label">Audit lookup:</span> ${audit.audit_target}</div>
                     <div><span class="detail-label">Horizons azimuth:</span> ${audit.horizons.azimuth_deg.toFixed(1)} deg</div>
                     <div><span class="detail-label">Horizons elevation:</span> ${audit.horizons.elevation_deg.toFixed(1)} deg</div>
                     <div><span class="detail-label">Sky separation:</span> ${totalOffset.toFixed(2)} deg</div>
